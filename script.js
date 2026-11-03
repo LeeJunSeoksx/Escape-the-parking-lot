@@ -756,14 +756,8 @@ function renderVehicles() {
       `;
     }
 
-    // Attach drag listener
+    // Attach drag listener (handles selection and real-time sliding)
     attachDrag(el, v, cellSize);
-
-    // Click to select
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      selectVehicle(v.id);
-    });
 
     vehiclesLayer.appendChild(el);
   });
@@ -771,11 +765,22 @@ function renderVehicles() {
   renderSelectedControls();
 }
 
-function selectVehicle(id) {
+function selectVehicle(id, skipDomRebuild = false) {
   if (selectedVehicleId === id) return;
   selectedVehicleId = id;
   sound.playSelect();
-  renderVehicles();
+  if (skipDomRebuild) {
+    document.querySelectorAll('#vehicles-layer > div').forEach((node) => {
+      if (node.getAttribute('data-id') === id) {
+        node.classList.add('ring-4', 'ring-amber-400', 'ring-offset-2', 'ring-offset-slate-900');
+      } else {
+        node.classList.remove('ring-4', 'ring-amber-400', 'ring-offset-2', 'ring-offset-slate-900');
+      }
+    });
+    renderSelectedControls();
+  } else {
+    renderVehicles();
+  }
 }
 
 function renderSelectedControls() {
@@ -783,7 +788,7 @@ function renderSelectedControls() {
   if (!v) {
     selectedControls.innerHTML = `
       <div class="w-full text-center text-xs text-slate-500 py-1">
-        차량을 클릭하고 드래그하거나 방향키로 조작하세요! (단축키: U 실행취소, R 다시시작, H 힌트)
+        차량을 마우스로 누른 채 원하는 방향으로 드래그하세요! (키보드 방향키 이동도 지원)
       </div>
     `;
     return;
@@ -858,26 +863,38 @@ function moveSelected(delta) {
   }
 }
 
-// Drag & Drop Handler
+// Drag & Drop Handler (Continuous mouse-hold drag)
 function attachDrag(el, vehicle, cellSize) {
   let startX = 0;
   let startY = 0;
   let isDragging = false;
   let range = { min: 0, max: 0 };
   let initialCoord = 0;
+  let currentOffsetPx = 0;
+  let pointerId = null;
 
   const onPointerDown = (e) => {
     if (isWon || isAutoPlaying) return;
+    if (e.button !== undefined && e.button !== 0) return;
+
     e.preventDefault();
     e.stopPropagation();
 
-    selectVehicle(vehicle.id);
+    pointerId = e.pointerId;
+    try {
+      el.setPointerCapture(pointerId);
+    } catch (err) {}
+
+    selectVehicle(vehicle.id, true);
+
     isDragging = true;
     startX = e.clientX;
     startY = e.clientY;
+    currentOffsetPx = 0;
     range = getValidRange(vehicle, vehicles);
     initialCoord = vehicle.orientation === 'H' ? vehicle.col : vehicle.row;
     el.style.transition = 'none';
+    el.classList.add('z-20', 'cursor-grabbing');
 
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
@@ -893,6 +910,12 @@ function attachDrag(el, vehicle, cellSize) {
     const maxOffsetPx = (range.max - initialCoord) * cellSize;
     const clampedOffset = Math.max(minOffsetPx, Math.min(maxOffsetPx, deltaPx));
 
+    if ((deltaPx <= minOffsetPx - 6 || deltaPx >= maxOffsetPx + 6) && Math.abs(clampedOffset) > 0) {
+      sound.playBump();
+    }
+
+    currentOffsetPx = clampedOffset;
+
     const baseLeft = vehicle.col * cellSize + 3;
     const baseTop = vehicle.row * cellSize + 3;
 
@@ -905,25 +928,22 @@ function attachDrag(el, vehicle, cellSize) {
   const onPointerUp = () => {
     if (!isDragging) return;
     isDragging = false;
+
+    if (pointerId !== null) {
+      try {
+        el.releasePointerCapture(pointerId);
+      } catch (err) {}
+      pointerId = null;
+    }
+
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
     window.removeEventListener('pointercancel', onPointerUp);
 
+    el.classList.remove('z-20', 'cursor-grabbing');
+
     const isH = vehicle.orientation === 'H';
-    const matrix = window.getComputedStyle(el).transform;
-    let offsetPx = 0;
-
-    if (matrix !== 'none') {
-      const match = matrix.match(/matrix.*\((.+)\)/);
-      if (match) {
-        const values = match[1].split(', ');
-        const curPx = isH ? parseFloat(values[4]) : parseFloat(values[5]);
-        const basePx = isH ? vehicle.col * cellSize + 3 : vehicle.row * cellSize + 3;
-        offsetPx = curPx - basePx;
-      }
-    }
-
-    const movedCells = Math.round(offsetPx / cellSize);
+    const movedCells = Math.round(currentOffsetPx / cellSize);
     const targetCoord = initialCoord + movedCells;
     const clampedCoord = Math.max(range.min, Math.min(range.max, targetCoord));
 
