@@ -9,13 +9,446 @@
     <meta property="og:description" content="복잡한 주차장을 탈출하는 클래식 두뇌 퍼즐 게임! 자동차들을 밀고 당겨 빨간 스포츠카를 출구로 탈출시키세요." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Plus Jakarta Sans"', '"Noto Sans KR"', 'sans-serif'],
+            },
+            colors: {
+              slate: {
+                850: '#151f32',
+                950: '#070b14',
+              }
+            }
+          }
+        }
+      }
+    </script>
+
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Canvas Confetti CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/dist/confetti.browser.min.js"></script>
+
+    <style>
+      body {
+        font-family: 'Plus Jakarta Sans', 'Noto Sans KR', sans-serif;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: manipulation;
+      }
+      @keyframes hazard-move {
+        0% { background-position: 0 0; }
+        100% { background-position: 40px 0; }
+      }
+      .hazard-stripes-exit {
+        background: repeating-linear-gradient(
+          -45deg,
+          #22c55e,
+          #22c55e 8px,
+          #0f172a 8px,
+          #0f172a 16px
+        );
+        animation: hazard-move 2s linear infinite;
+      }
+      /* Hide scrollbar for tabs */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
   </head>
-  <body class="bg-slate-900 text-slate-100 antialiased selection:bg-rose-500 selection:text-white">
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+  <body class="bg-slate-950 text-slate-100 antialiased selection:bg-rose-500 selection:text-white min-h-screen flex flex-col font-sans">
+    <!-- Top Header Navigation -->
+    <header class="flex items-center justify-between gap-8 px-6 py-4 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
+      <div class="flex items-center gap-2.5 whitespace-nowrap shrink-0">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-600 to-red-500 flex items-center justify-center text-white shadow-md shadow-rose-950/40">
+          <i data-lucide="car" class="w-4 h-4"></i>
+        </div>
+        <span class="text-base font-black tracking-tight text-white">러시아워 탈출 퍼즐</span>
+      </div>
+
+      <nav class="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-400">
+        <button id="nav-btn-stages" class="hover:text-white transition-colors whitespace-nowrap shrink-0">
+          스테이지 (24단계)
+        </button>
+        <button id="nav-btn-editor" class="hover:text-white transition-colors whitespace-nowrap shrink-0">
+          나만의 레벨 만들기
+        </button>
+        <button id="nav-btn-rules" class="hover:text-white transition-colors whitespace-nowrap shrink-0">
+          게임 규칙
+        </button>
+      </nav>
+
+      <div class="flex items-center gap-2.5 shrink-0">
+        <button id="btn-sound-toggle" class="p-2 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700" title="사운드 켜기/끄기">
+          <i data-lucide="volume-2" id="icon-sound" class="w-4 h-4 text-emerald-400"></i>
+        </button>
+
+        <button id="btn-reset-header" class="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 active:bg-rose-700 rounded-xl transition-all shadow-md shadow-rose-950/40 whitespace-nowrap shrink-0">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          <span>새로 시작</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Game Container -->
+    <main class="flex-1 flex flex-col items-center justify-center px-4 py-6 max-w-5xl mx-auto w-full gap-5">
+      <!-- HUD Section -->
+      <div id="game-hud" class="w-full max-w-[500px] flex flex-col gap-3">
+        <!-- Top Status Card -->
+        <div class="bg-slate-800/90 backdrop-blur-md rounded-2xl p-3 border border-slate-700/80 shadow-lg">
+          <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-700/60">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <button id="btn-prev-stage" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="이전 스테이지">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              </button>
+
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span id="hud-stage-num" class="text-xs font-black tracking-wide text-rose-400 uppercase">STAGE 01</span>
+                  <span id="hud-difficulty-badge" class="text-[10px] font-bold px-1.5 py-0.5 rounded border text-emerald-400 bg-emerald-950/60 border-emerald-500/40">초급</span>
+                </div>
+                <h2 id="hud-stage-title" class="text-sm font-bold text-slate-100 truncate mt-0.5">첫 번째 탈출</h2>
+              </div>
+
+              <button id="btn-next-stage" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="다음 스테이지">
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <div class="flex items-center gap-1">
+              <button id="btn-open-stages" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-200 bg-slate-700/70 hover:bg-slate-600/80 border border-slate-600 transition-colors" title="스테이지 목록">
+                <i data-lucide="grid" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">목록</span>
+              </button>
+
+              <button id="btn-open-editor" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-300 bg-amber-950/50 hover:bg-amber-900/60 border border-amber-600/50 transition-colors" title="나만의 레벨 만들기">
+                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">제작</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Stats Grid -->
+          <div class="grid grid-cols-3 gap-2 pt-2.5 text-center">
+            <div class="bg-slate-900/60 rounded-xl p-2 border border-slate-800">
+              <div class="text-[11px] font-medium text-slate-400">현재 이동</div>
+              <div class="flex items-baseline justify-center gap-1 mt-0.5">
+                <span id="hud-moves" class="text-lg font-black text-white tabular-nums">0</span>
+                <span id="hud-par" class="text-xs text-slate-500 font-bold tabular-nums">/ 4수</span>
+              </div>
+            </div>
+
+            <div class="bg-slate-900/60 rounded-xl p-2 border border-slate-800">
+              <div class="text-[11px] font-medium text-slate-400 flex items-center justify-center gap-1">
+                <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
+                <span>진행 시간</span>
+              </div>
+              <div id="hud-timer" class="text-lg font-black text-sky-400 tabular-nums mt-0.5">00:00</div>
+            </div>
+
+            <div class="bg-slate-900/60 rounded-xl p-2 border border-slate-800">
+              <div class="text-[11px] font-medium text-slate-400 flex items-center justify-center gap-1">
+                <i data-lucide="award" class="w-3 h-3 text-amber-400"></i>
+                <span>예상 등급</span>
+              </div>
+              <div id="hud-stars" class="flex items-center justify-center gap-0.5 text-amber-400 mt-0.5 text-base">
+                <span id="star-1" class="opacity-100">★</span>
+                <span id="star-2" class="opacity-100">★</span>
+                <span id="star-3" class="opacity-100">★</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Control Buttons -->
+        <div class="grid grid-cols-4 gap-2">
+          <button id="btn-hint" class="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 active:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-colors shadow-sm">
+            <i data-lucide="lightbulb" class="w-4 h-4 mb-0.5 text-amber-400"></i>
+            <span class="text-[11px] font-bold">힌트 보기</span>
+          </button>
+
+          <button id="btn-undo" class="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-850 text-slate-200 border border-slate-700 transition-colors shadow-sm disabled:opacity-40">
+            <i data-lucide="rotate-ccw" class="w-4 h-4 mb-0.5 text-slate-300"></i>
+            <span class="text-[11px] font-bold">실행 취소</span>
+          </button>
+
+          <button id="btn-reset" class="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-850 text-slate-200 border border-slate-700 transition-colors shadow-sm">
+            <i data-lucide="refresh-cw" class="w-4 h-4 mb-0.5 text-slate-300"></i>
+            <span class="text-[11px] font-bold">다시 시작</span>
+          </button>
+
+          <button id="btn-autoplay" class="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 transition-colors shadow-sm">
+            <i data-lucide="play" id="icon-autoplay" class="w-4 h-4 mb-0.5 text-emerald-400"></i>
+            <span id="label-autoplay" class="text-[11px] font-bold">자동 해결</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Game Board Frame -->
+      <div class="flex flex-col items-center select-none w-full max-w-[460px] mx-auto">
+        <div class="relative p-3.5 sm:p-4 bg-gradient-to-b from-slate-800 via-slate-850 to-slate-900 rounded-3xl shadow-2xl border-2 border-slate-700/80 w-full">
+          <!-- Parking Lot Header -->
+          <div class="flex items-center justify-between pb-2.5 px-2 border-b border-slate-700/60 mb-3 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="font-extrabold tracking-wider text-slate-300">PARKING LOT 6×6</span>
+              <span class="text-slate-500">·</span>
+              <span class="text-slate-400 font-mono text-[11px]">ZONE-A</span>
+            </div>
+            <div class="flex items-center gap-1.5 text-emerald-400 font-bold text-[11px]">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>출구: 3번 라인 우측</span>
+            </div>
+          </div>
+
+          <!-- Board Area -->
+          <div class="relative flex items-center">
+            <!-- 6x6 Grid Container -->
+            <div id="board-container" class="relative w-full aspect-square bg-slate-950 rounded-2xl border border-slate-800 overflow-visible shadow-inner" style="touch-action: none;">
+              <!-- Grid background cells -->
+              <div id="grid-background" class="absolute inset-0 grid grid-cols-6 grid-rows-6 pointer-events-none p-1"></div>
+              <!-- Vehicles Layer -->
+              <div id="vehicles-layer" class="absolute inset-0"></div>
+            </div>
+
+            <!-- Exit Gate on Row 2 (0-indexed: row 2) -->
+            <div id="exit-gate" class="absolute -right-4.5 sm:-right-5 z-20 flex flex-col items-center justify-center">
+              <div class="w-full h-full rounded-r-xl border-y-2 border-r-2 border-emerald-400 hazard-stripes-exit shadow-[0_0_15px_rgba(52,211,153,0.5)] flex flex-col items-center justify-center">
+                <span class="text-[10px] font-black text-white leading-none rotate-90 select-none">EXIT</span>
+              </div>
+              <div class="text-[12px] text-emerald-400 font-black animate-pulse leading-none mt-1">➔</div>
+            </div>
+          </div>
+
+          <!-- Quick Move Controls for Selected Vehicle -->
+          <div id="selected-controls" class="mt-3.5 pt-3 border-t border-slate-700/60 flex items-center justify-between min-h-[44px]">
+            <div class="w-full text-center text-xs text-slate-500 py-1">
+              차량을 클릭하고 드래그하거나 방향키로 조작하세요!
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer Guide -->
+      <footer class="text-center text-xs text-slate-500 pt-2 pb-4">
+        <span>차량을 클릭하고 드래그하거나 방향키로 조작하세요</span>
+        <span class="mx-2">·</span>
+        <span>주인공 빨간 스포츠카를 우측 출구로 탈출시키면 승리!</span>
+      </footer>
+    </main>
+
+    <!-- Victory Modal -->
+    <div id="modal-victory" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div class="relative w-full max-w-sm bg-gradient-to-b from-slate-800 to-slate-900 rounded-3xl p-6 border-2 border-emerald-500/50 shadow-2xl shadow-emerald-950/60 text-center">
+        <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-tr from-amber-500 to-emerald-400 p-0.5 shadow-lg shadow-emerald-500/30 flex items-center justify-center">
+          <div class="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center text-amber-400">
+            <i data-lucide="trophy" class="w-8 h-8 animate-bounce"></i>
+          </div>
+        </div>
+
+        <h3 class="text-2xl font-black text-white tracking-tight">탈출 성공!</h3>
+        <p id="victory-stage-title" class="text-xs text-slate-400 mt-1">스테이지 완료</p>
+
+        <div id="victory-stars" class="flex items-center justify-center gap-2 my-4 text-3xl text-amber-400">
+          <span>★</span><span>★</span><span>★</span>
+        </div>
+
+        <div id="victory-eval-text" class="text-xs font-bold text-emerald-400 mb-4">
+          최적의 최단 경로 달성! 완벽한 두뇌 플레이!
+        </div>
+
+        <div class="bg-slate-950/60 rounded-2xl p-3.5 border border-slate-800 text-left mb-5 space-y-2.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-400 flex items-center gap-1.5">
+              <i data-lucide="award" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span>이동 횟수</span>
+            </span>
+            <span id="victory-moves-text" class="font-extrabold text-white">4회 (목표 4회)</span>
+          </div>
+
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-400 flex items-center gap-1.5">
+              <i data-lucide="clock" class="w-3.5 h-3.5 text-sky-400"></i>
+              <span>소요 시간</span>
+            </span>
+            <span id="victory-time-text" class="font-extrabold text-sky-300">0분 15초</span>
+          </div>
+
+          <div id="victory-new-record" class="hidden pt-2 border-t border-slate-800 text-center">
+            <span class="inline-block px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[11px] font-black border border-rose-500/30">
+              🎉 신기록 달성!
+            </span>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <button id="victory-btn-next" class="w-full py-3 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm rounded-xl shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2">
+            <span>다음 스테이지</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button id="victory-btn-replay" class="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-1.5">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-slate-300"></i>
+              <span>다시 플레이</span>
+            </button>
+            <button id="victory-btn-stages" class="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-1.5">
+              <i data-lucide="grid" class="w-3.5 h-3.5 text-slate-300"></i>
+              <span>스테이지 목록</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stage Selector Modal -->
+    <div id="modal-stages" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div class="relative w-full max-w-xl bg-slate-900 rounded-3xl border border-slate-700/80 shadow-2xl flex flex-col max-h-[85vh]">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+          <div>
+            <h3 class="text-lg font-bold text-white tracking-tight">스테이지 선택</h3>
+            <p class="text-xs text-slate-400 mt-0.5">도전할 퍼즐을 선택하거나 직접 레벨을 제작하세요.</p>
+          </div>
+          <button id="stages-btn-close" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div id="stages-filter-tabs" class="flex items-center gap-1.5 px-6 py-3 border-b border-slate-800/80 overflow-x-auto no-scrollbar">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <div id="stages-list-container" class="p-6 overflow-y-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <div class="flex items-center justify-between px-6 py-4 border-t border-slate-800 bg-slate-900/50 rounded-b-3xl">
+          <button id="stages-btn-create" class="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-amber-300 bg-amber-950/60 hover:bg-amber-900/70 border border-amber-600/50 rounded-xl transition-colors shadow-sm">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>나만의 레벨 만들기</span>
+          </button>
+          <button id="stages-btn-close-footer" class="px-4 py-2 text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors">
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Level Editor Modal -->
+    <div id="modal-editor" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div class="relative w-full max-w-xl bg-slate-900 rounded-3xl border border-slate-700/80 shadow-2xl flex flex-col max-h-[90vh]">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+          <div>
+            <h3 class="text-lg font-bold text-white tracking-tight">나만의 레벨 만들기 (Level Editor)</h3>
+            <p class="text-xs text-slate-400 mt-0.5">그리드를 클릭하여 차량을 배치하고, 해결 가능 여부를 검증하세요.</p>
+          </div>
+          <button id="editor-btn-close" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="p-6 overflow-y-auto flex-1 flex flex-col items-center gap-5">
+          <div class="w-full">
+            <label class="block text-xs font-semibold text-slate-300 mb-1">스테이지 제목</label>
+            <input id="editor-title-input" type="text" value="나만의 커스텀 퍼즐" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-rose-500 transition-colors" placeholder="퍼즐 이름을 입력하세요" />
+          </div>
+
+          <!-- 6x6 Editor Grid -->
+          <div id="editor-grid" class="relative w-64 h-64 sm:w-72 sm:h-72 bg-slate-950 rounded-2xl border-2 border-slate-800 shadow-inner grid grid-cols-6 grid-rows-6 p-1 select-none">
+            <!-- Grid cells and placed cars rendered dynamically -->
+          </div>
+
+          <!-- Tools -->
+          <div class="w-full bg-slate-800/70 p-3.5 rounded-2xl border border-slate-700 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300">도구 선택</span>
+              <div class="flex items-center gap-1.5">
+                <button id="tool-mode-place" class="px-3 py-1 text-xs font-bold rounded-lg bg-rose-500 text-white transition-colors">
+                  배치 모드
+                </button>
+                <button id="tool-mode-erase" class="px-3 py-1 text-xs font-bold rounded-lg text-slate-400 hover:text-white bg-slate-700/60 transition-colors flex items-center gap-1">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i>
+                  <span>삭제</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="editor-tool-items" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <div id="editor-validation-banner" class="hidden w-full p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between px-6 py-4 border-t border-slate-800 bg-slate-900/50 rounded-b-3xl">
+          <button id="editor-btn-validate" class="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-colors">
+            <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+            <span>해결 가능 여부 검사</span>
+          </button>
+          <button id="editor-btn-save" disabled class="flex items-center gap-2 px-5 py-2.5 text-xs font-black text-slate-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 disabled:opacity-40 disabled:pointer-events-none rounded-xl shadow-lg shadow-emerald-500/30 transition-all">
+            <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+            <span>저장하고 바로 플레이</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- How to play Modal -->
+    <div id="modal-rules" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div class="relative w-full max-w-md bg-slate-900 rounded-3xl border border-slate-700/80 p-6 text-slate-200 shadow-2xl">
+        <h3 class="text-lg font-black text-white flex items-center gap-2">
+          <i data-lucide="sparkles" class="w-5 h-5 text-amber-400"></i>
+          <span>러시아워 게임 규칙</span>
+        </h3>
+
+        <div class="space-y-3 mt-4 text-xs leading-relaxed text-slate-300">
+          <p>
+            <strong>1. 게임의 목표:</strong> 복잡하게 얽혀 있는 주차장에서 장애물 차량들을 밀고 당겨 <span class="text-rose-400 font-bold">빨간색 주인공 스포츠카</span>를 우측 <span class="text-emerald-400 font-bold">EXIT(출구)</span>로 탈출시키세요!
+          </p>
+          <p>
+            <strong>2. 차량 이동 규칙:</strong>
+            <br />• <strong>가로 차량:</strong> 좌우로만 미끄러지듯 이동할 수 있습니다.
+            <br />• <strong>세로 차량:</strong> 상하로만 이동할 수 있습니다.
+            <br />• 차를 돌리거나 다른 차량을 뛰어넘을 수 없습니다.
+          </p>
+          <p>
+            <strong>3. 조작 방법:</strong>
+            <br />• 마우스 또는 터치로 차량을 원하는 방향으로 드래그합니다.
+            <br />• 차량을 클릭한 후 하단 방향 버튼이나 키보드 방향키를 눌러도 이동합니다.
+          </p>
+          <p>
+            <strong>4. 두뇌 도우미 기능:</strong>
+            <br />• <strong>힌트:</strong> 막혔을 때 최적의 다음 이동을 안내합니다.
+            <br />• <strong>자동 해결:</strong> 인공지능 탐색 알고리즘이 자동으로 최단 경로 탈출을 시연합니다.
+            <br />• <strong>나만의 레벨:</strong> 직접 차량을 배치하고 해결 가능성을 검증할 수 있습니다.
+          </p>
+        </div>
+
+        <button id="rules-btn-close" class="w-full mt-5 py-2.5 bg-rose-600 hover:bg-rose-500 font-bold text-xs text-white rounded-xl transition-colors">
+          확인하고 게임 시작
+        </button>
+      </div>
+    </div>
+
+    <!-- Pure Vanilla JS Game Logic (Zero build tool required) -->
+    <script type="module" src="./script.js"></script>
   </body>
 </html>
-
