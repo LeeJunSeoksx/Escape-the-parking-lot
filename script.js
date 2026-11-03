@@ -428,7 +428,7 @@ function parseBoardString(str, idPrefix, stageNum, title, diff) {
     difficulty: diff,
     parMoves: sol.minMoves || 10,
     vehicles: vehicles,
-    description: `최소 ${sol.minMoves || 10}번의 이동으로 빨간 스포츠카를 탈출시키세요.`
+    description: `이동 수 제한 없이 자유롭게 빨간 스포츠카를 탈출시키세요. (최단 해결: ${sol.minMoves || 10}수)`
   };
 }
 
@@ -566,13 +566,13 @@ function updateHUD() {
   hudDifficultyBadge.className = `text-[10px] font-bold px-1.5 py-0.5 rounded border ${b.cls}`;
 
   hudMoves.textContent = moves;
-  hudPar.textContent = `/ ${lvl.parMoves}수`;
+  hudPar.textContent = `무제한 · 최단 ${lvl.parMoves}수`;
 
   const mins = Math.floor(elapsedSeconds / 60);
   const secs = elapsedSeconds % 60;
   hudTimer.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
-  const currentStars = moves <= lvl.parMoves ? 3 : moves <= Math.ceil(lvl.parMoves * 1.5) ? 2 : 1;
+  const currentStars = moves <= Math.ceil(lvl.parMoves * 1.5) ? 3 : 2;
   document.getElementById('star-1').className = currentStars >= 1 ? 'opacity-100' : 'opacity-25';
   document.getElementById('star-2').className = currentStars >= 2 ? 'opacity-100' : 'opacity-25';
   document.getElementById('star-3').className = currentStars >= 3 ? 'opacity-100' : 'opacity-25';
@@ -1016,13 +1016,11 @@ function showVictoryModal() {
   `;
 
   victoryEvalText.textContent =
-    stars === 3
-      ? '최적의 최단 경로 달성! 완벽한 두뇌 플레이!'
-      : stars === 2
-      ? '훌륭합니다! 조금만 더 줄이면 3스타 달성 가능!'
-      : '주차장 탈출 완료! 다음엔 더 적은 이동에 도전해보세요!';
+    stars >= 2
+      ? '완벽한 탈출 성공! 자유롭게 길을 찾아 탈출을 완료했습니다.'
+      : '주차장 탈출 성공! 멋진 두뇌 플레이였습니다.';
 
-  victoryMovesText.textContent = `${moves}회 (목표 ${lvl.parMoves}회)`;
+  victoryMovesText.textContent = `${moves}회 (이동 무제한 · 최단 ${lvl.parMoves}수)`;
   const mins = Math.floor(elapsedSeconds / 60);
   const secs = elapsedSeconds % 60;
   victoryTimeText.textContent = `${mins}분 ${secs}초`;
@@ -1310,8 +1308,8 @@ function renderStageCards() {
         </div>
       </div>
       <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-        <span>목표: ${lvl.parMoves}수</span>
-        ${p?.bestMoves ? `<span class="text-emerald-400 font-bold">최고: ${p.bestMoves}수</span>` : '<span class="text-slate-500">도전 전</span>'}
+        <span>최단 경로: ${lvl.parMoves}수 (무제한)</span>
+        ${p?.bestMoves ? `<span class="text-emerald-400 font-bold">최고 기록: ${p.bestMoves}수</span>` : '<span class="text-slate-500">도전 전</span>'}
       </div>
     `;
 
